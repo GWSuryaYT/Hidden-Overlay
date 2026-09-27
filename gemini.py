@@ -3,6 +3,13 @@ from dotenv import load_dotenv
 import os
 import chromadb
 from chunker import chunky
+import uuid
+
+#Enable or disbale the context memory:
+context = True #this will save the contexts in the database using chromadb :> will cost api and some time too bcz in background many stuffs are doing its job :>
+previousmsg = False #recomended
+both = False
+
 
 chunk = chunky()
 
@@ -39,15 +46,13 @@ def store(paragraph:str, chunk_size:int=20, overlap:int=10):
     all_text_chunks = chunk.chunk_maker(paragraph=paragraph, overlap=overlap,chunk_size=chunk_size)
 
     #now we can just save them one by one
-    id_chunk =1
     for one_chunk in all_text_chunks:
 
         collection.add(
-            ids = str(id_chunk),
-            documents= one_chunk,
-            embeddings= gemini_encodding(one_chunk)
+            ids = [str(uuid.uuid4())],
+            documents= [one_chunk],
+            embeddings= [gemini_encodding(one_chunk)]
         )
-        id_chunk+=1
 
 def context_call(text, top_k:int=2):
     embedding = gemini_encodding(text=text)
@@ -55,21 +60,40 @@ def context_call(text, top_k:int=2):
         query_embeddings= [embedding],
         n_results= top_k
     )
+    docs = query_results.get('documents', [[]])[0]
+    return "\n".join(docs)
 
-    return query_results
+def response(text:str, previous_msg):
+    if previousmsg:
+        interaction = ai_client.interactions.create(
+            input= f'''You are a helpful ai assistant who help users requests. User Query: {text}
+Privous message: {previous_msg}''',
+            model="gemini-3.1-flash-lite"
+         )
+        results = interaction.output_text
+    elif context:
+        interaction = ai_client.interactions.create(
+            input= f'''You are a helpful ai assistant who help users requests. User Query: {text}
+contexts {context_call(text=text)}''',
+            model="gemini-3.1-flash-lite"
+        )
+        #first store the user's query
+        store(paragraph=text)
+        #now store the results
+        results = interaction.output_text
+        store(paragraph=results)
 
-def response(text):
-
-    interaction = ai_client.interactions.create(
-        input= f'''You are a helpful ai assistant who help users requests. User Query: {text}
-Context of similar type: {context_call(text=text)}''', # we will make it a function tool later.
-        model="gemini-3.1-flash-lite"
-    )
-
+    elif both:
+        interaction = ai_client.interactions.create(
+            input= f'''You are a helpful ai assistant who help users requests. User Query: {text}
+previous message: {str(previous_msg)}
+contexts {context_call(text=text)}''',
+            model="gemini-3.1-flash-lite"
+        )
+        #first store the user's query
+        store(paragraph=text)
+        #now store the results
+        results = interaction.output_text
+        store(paragraph=results)  
     #now we will save the data here:
-    
-    #first save the input text
-    store(paragraph=text)
-    results = interaction.output_text
-    store(paragraph=results)
     return results

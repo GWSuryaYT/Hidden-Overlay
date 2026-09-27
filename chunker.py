@@ -14,7 +14,7 @@ class chunky:
 
         for sentence in sentence_list:
 
-            words = len(sentence.split())
+            words = len(chunked_text.split())
 
             if words < chunk_size:
 

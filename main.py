@@ -4,6 +4,10 @@ import tkinter as tk
 from gemini import response
 import speech_recognition as sr
 import threading
+from gemini import previousmsg
+from gemini import context
+from gemini import both
+
 
 # ==============================================================================
 # 1. WINDOWS API CONFIGURATION (Hide the screen from captures)
@@ -62,10 +66,15 @@ def apply_protection():
 # Functions:
 # ==============================================================================
 
-
+saved_previous_msgs = []
 def send_msg():
     msg = input_entry.get()
-    reply = response(msg)
+    reply = response(msg, saved_previous_msgs)
+
+    #saving the mesgs:
+    if previousmsg:
+        data = {"prompt": msg, "Gemini_reply": reply} 
+        saved_previous_msgs.append(data)
 
     # 1. Allow program to edit the text
     paragraph_text.config(state="normal")  
